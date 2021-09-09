@@ -33,6 +33,8 @@ public class DOMUtils {
 
 	private static final Logger LOGGER = Logger.getLogger(DOMUtils.class.getName());
 
+  private static final String IDISS_EXTENSION = ".ssb";
+
 	private static final String XSD_EXTENSION = ".xsd";
 
 	// DTD file extensions
@@ -42,6 +44,8 @@ public class DOMUtils {
 
 	private static final String MOD_EXTENSION = ".mod";
 
+  private static final String IDISS_NS = "https://dapsi-idiss.github.io/semantic-crosswalk-editor/idiss-1.0.0.xsd";
+
 	private static final String HTTP_WWW_W3_ORG_2001_XML_SCHEMA_NS = "http://www.w3.org/2001/XMLSchema";
 
 	private static final String URN_OASIS_NAMES_TC_ENTITY_XMLNS_XML_CATALOG_NS = "urn:oasis:names:tc:entity:xmlns:xml:catalog";
@@ -50,9 +54,37 @@ public class DOMUtils {
 
 	}
 
+  /**
+   * Returns true if the XML document is a XML Schema and false otherwise.
+   *
+   * @return true if the XML document is a XML Schema and false otherwise.
+   */
+  public static boolean isIDISS(DOMDocument document) {
+    if (document == null) {
+      return false;
+    }
+    String uri = document.getDocumentURI();
+    if (isIDISS(uri)) {
+      return true;
+    }
+    // check root element is bound with XML Schema namespace
+    // (http://www.w3.org/2001/XMLSchema)
+    return checkRootNamespace(document, IDISS_NS);
+  }
+
+  /**
+   * Returns true if the given URI is a XML Schema and false otherwise.
+   *
+   * @param uri the URI to check
+   * @return true if the given URI is a XML Schema and false otherwise.
+   */
+  public static boolean isIDISS(String uri) {
+    return uri != null && uri.endsWith(IDISS_EXTENSION);
+  }
+
 	/**
 	 * Returns true if the XML document is a XML Schema and false otherwise.
-	 * 
+	 *
 	 * @return true if the XML document is a XML Schema and false otherwise.
 	 */
 	public static boolean isXSD(DOMDocument document) {
@@ -70,7 +102,7 @@ public class DOMUtils {
 
 	/**
 	 * Returns true if the given URI is a XML Schema and false otherwise.
-	 * 
+	 *
 	 * @param uri the URI to check
 	 * @return true if the given URI is a XML Schema and false otherwise.
 	 */
@@ -80,7 +112,7 @@ public class DOMUtils {
 
 	/**
 	 * Returns true if the XML document is a XML Catalog and false otherwise.
-	 * 
+	 *
 	 * @return true if the XML document is a XML Catalog and false otherwise.
 	 */
 	public static boolean isCatalog(DOMDocument document) {
@@ -92,7 +124,7 @@ public class DOMUtils {
 	/**
 	 * Returns true if the document element root is bound to the given namespace and
 	 * false otherwise.
-	 * 
+	 *
 	 * @param document
 	 * @param namespace
 	 * @return true if the document element root is bound to the given namespace and
@@ -105,7 +137,7 @@ public class DOMUtils {
 
 	/**
 	 * Returns true if the given URI is a DTD and false otherwise.
-	 * 
+	 *
 	 * @param uri the URI to check
 	 * @return true if the given URI is a DTD and false otherwise.
 	 */
@@ -116,7 +148,7 @@ public class DOMUtils {
 
 	/**
 	 * Returns true if element contains only DOMText and false otherwise.
-	 * 
+	 *
 	 * @return true if element contains only DOMText and false otherwise.
 	 */
 	public static boolean containsTextOnly(DOMElement element) {
@@ -125,7 +157,7 @@ public class DOMUtils {
 
 	/**
 	 * Returns the DOM document from the given XML Schema uri.
-	 * 
+	 *
 	 * @param documentURI              the schema URI
 	 * @param resolverExtensionManager
 	 * @return the DOM document from the given XML Schema uri.
@@ -143,7 +175,7 @@ public class DOMUtils {
 	/**
 	 * Returns an instance of SAX parser factory by disabling external entities
 	 * declarations.
-	 * 
+	 *
 	 * @return an instance of SAX parser factory by disabling external entities
 	 *         declarations.
 	 * @throws SAXNotRecognizedException
