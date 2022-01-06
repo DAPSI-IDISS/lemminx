@@ -23,7 +23,7 @@
  */
 package org.eclipse.lemminx.extensions.idiss.contentmodel;
 
-import org.jsoup.helper.StringUtil;
+import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
@@ -44,10 +44,10 @@ public class HtmlToPlainText {
 	 * @param element the root element to format
 	 * @return formatted text
 	 */
-	public String getPlainText(Element element) {
-		FormattingVisitor formatter = new FormattingVisitor();
-		NodeTraversor traversor = new NodeTraversor(formatter);
-		traversor.traverse(element); // walk the DOM, and call .head() and .tail() for each node
+	public String getPlainText(Element element) {		
+		NodeTraversor traversor = new NodeTraversor();
+                FormattingVisitor formatter = new FormattingVisitor();
+		traversor.traverse(formatter, element); // walk the DOM, and call .head() and .tail() for each node
 
 		return formatter.toString();
 	}
