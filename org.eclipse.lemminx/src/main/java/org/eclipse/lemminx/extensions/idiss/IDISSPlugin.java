@@ -89,7 +89,7 @@ public class IDISSPlugin implements IXMLExtension {
 		// register IDISS content model provider
 		ContentModelProvider modelProvider = new CMIDISSContentModelProvider(registry.getResolverExtensionManager());
 		modelManager = registry.getComponent(ContentModelManager.class);
-		modelManager.registerModelProvider(modelProvider);
+		//modelManager.registerModelProvider(modelProvider);
 		// register completion, diagnostic participant
 		registry.registerCompletionParticipant(completionParticipant);
 		registry.registerDefinitionParticipant(definitionParticipant);
@@ -98,7 +98,7 @@ public class IDISSPlugin implements IXMLExtension {
 		registry.registerCodeLensParticipant(codeLensParticipant);
 		registry.registerHighlightingParticipant(highlightingParticipant);
 		registry.registerRenameParticipant(renameParticipant);
-		registry.registerDocumentLinkParticipant(documentLinkParticipant);
+//	registry.registerDocumentLinkParticipant(documentLinkParticipant);
 	}
 
 	@Override
