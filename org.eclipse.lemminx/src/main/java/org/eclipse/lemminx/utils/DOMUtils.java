@@ -33,7 +33,7 @@ public class DOMUtils {
 
 	private static final Logger LOGGER = Logger.getLogger(DOMUtils.class.getName());
 
-  private static final String IDISS_EXTENSION = ".ssb";
+        private static final String IDISS_EXTENSION = ".syb";
 
 	private static final String XSD_EXTENSION = ".xsd";
 

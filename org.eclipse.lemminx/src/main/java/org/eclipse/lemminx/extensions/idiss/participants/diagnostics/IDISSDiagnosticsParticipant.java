@@ -32,7 +32,7 @@ public class IDISSDiagnosticsParticipant implements IDiagnosticsParticipant {
 	public void doDiagnostics(DOMDocument xmlDocument, List<Diagnostic> diagnostics,
 			XMLValidationSettings validationSettings, CancelChecker cancelChecker) {
 		if (!DOMUtils.isIDISS(xmlDocument)) {
-			// Don't use the IDISS validator, if the XML document is not a XML Schema.
+			// Don't use the IDISS validator, if the XML document is not syntax binding.
 			return;
 		}
 		// Get entity resolver (XML catalog resolver, XML schema from the file
