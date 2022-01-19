@@ -123,19 +123,24 @@ public class IDISSValidator {
     //System.err.println("Parsed 'syntax-binding.syb' with XMLParser in " + (System.currentTimeMillis() - start) + " ms.");
   }
 
-  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity) throws BadLocationException {
-    TextDocument textDocument = node.getOwnerDocument().getTextDocument();
-    // diagnostic.setRange(XMLPositionUtility.createRange(node.getStart(), node.getEnd(), node.getOwnerDocument()));
-    /*
-    node.getStart();
-    diagnostic.setRange(new Range(new Position(problem.getLineNumber() - 1, problem.getColumnNumber() - 1),
-      new Position(problem.getLineNumber() - 1, problem.getColumnNumber())));
-    */
-    Range range = new Range(textDocument.positionAt(node.getStart()), textDocument.positionAt(node.getEnd()));
+  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity) {
+    Range range = null;
+    try{
+      TextDocument textDocument = node.getOwnerDocument().getTextDocument();
+      // diagnostic.setRange(XMLPositionUtility.createRange(node.getStart(), node.getEnd(), node.getOwnerDocument()));
+      /*
+      node.getStart();
+      diagnostic.setRange(new Range(new Position(problem.getLineNumber() - 1, problem.getColumnNumber() - 1),
+        new Position(problem.getLineNumber() - 1, problem.getColumnNumber())));
+      */
+      range = new Range(textDocument.positionAt(node.getStart()), textDocument.positionAt(node.getEnd()));
+    } catch (BadLocationException e) {
+      e.printStackTrace();
+    }
     return toDiagnostic(node, message, severity, range);
   }
 
-  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity, @Nonnull Range range) throws BadLocationException {
+  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity, @Nonnull Range range) {
     Diagnostic diagnostic = new Diagnostic();
     diagnostic.setMessage(message);
     diagnostic.setSeverity(severity);
@@ -163,58 +168,41 @@ public class IDISSValidator {
   public static void validateSyntaxBinding(DOMDocument document, List<Diagnostic> diagnostics, Map<String, Map> syntaxBindingReference ) {
     Boolean fillReference = Boolean.FALSE;
     Map<String, Map> syntaxBindingReferenceCopy = null;
-    if(syntaxBindingReference.isEmpty()){
+    if (syntaxBindingReference.isEmpty()) {
       fillReference = Boolean.TRUE;
-    }else{
+    } else {
       syntaxBindingReferenceCopy = clone(syntaxBindingReference);
     }
 
     DOMNode documentElement = document.getDocumentElement();
-    if(documentElement != null){
+    if (documentElement != null) {
       // every semanticNode defined can be gathered by ID
       NodeList allSemanticNodes = documentElement.getChildNodes();
       int length = allSemanticNodes.getLength();
-      for(int i = 0; i < allSemanticNodes.getLength();i++){
+      for (int i = 0; i < allSemanticNodes.getLength(); i++) {
         Map<String, Object> semanticMap = new HashMap<String, Object>(7);
         Node semanticNode = allSemanticNodes.item(i);
-        if(!(semanticNode instanceof Text)){ // expected are solely semantic children at this level (either attributes or child elements 'xml')
-          if(semanticNode instanceof DOMAttr){
+        if (!(semanticNode instanceof Text)) { // expected are solely semantic children at this level (either attributes or child elements 'xml')
+          if (semanticNode instanceof DOMAttr) {
             String localName = semanticNode.getLocalName();
             //2DO: trigger diagnostic: strangely the root element is never taken by
             // likely attributes are never part of the children() result
 
             String value = ((DOMAttr) semanticNode).getValue();
             String attrNodeValue = ((DOMAttr) semanticNode).getNodeValue();
-          }else if(semanticNode instanceof DOMElement){
+          } else if (semanticNode instanceof DOMElement) {
             String localName = semanticNode.getLocalName();
             //2DO: trigger diagnostic: if local name is not semantic
-            NodeList semanticChildren = semanticNode.getChildNodes();
-            int xmlCount = semanticChildren.getLength();
-            if(xmlCount > 0){
-              Collection<String> xmlPaths = new ArrayDeque<String>(xmlCount);
-              for (int x = 0; x < xmlCount; x++){
-                DOMElement xmlNode = (DOMElement) semanticChildren.item(x);
-                NamedNodeMap xmlAttrNodes = xmlNode.getAttributes();
-                int numAttrs = xmlAttrNodes.getLength();
-                for (int a = 0; a < numAttrs; a++) {
-                  Attr attr = (Attr) xmlAttrNodes.item(a);
-                  String attrName = attr.getNodeName();
-                  String attrValue = attr.getNodeValue();
-                  if (attrName.equals("path")) {
-                    xmlPaths.add(attrValue);
-                  }
-                }
-              }
-              semanticMap.put("xmlChildren", xmlPaths);
-            }
+
+            // *** VALIDATE THE ATTRIBUTES OF SEMANTIC
             NamedNodeMap semanticAttrNodes = semanticNode.getAttributes();
             // fetch the ID in the beginning to identify the correct reference
             Attr idAttr = (Attr) semanticAttrNodes.getNamedItem("id");
             String idValue = idAttr.getNodeValue();
             Map<String, Object> semanticRef = null;
-            if(fillReference){ // run on reference document
+            if (fillReference) { // run on reference document
               syntaxBindingReference.put(idValue, semanticMap);
-            }else{ // run on test document
+            } else { // run on test document
               semanticRef = syntaxBindingReferenceCopy.get(idValue);
             }
             int attCount = semanticAttrNodes.getLength();
@@ -228,29 +216,60 @@ public class IDISSValidator {
               if (fillReference) { // run on reference document
                 semanticMap.put(attrName, attrValue);
               } else {
-                // checkAttribute()
+                // validate attributes of semantic element
                 if (semanticRef.containsKey(attrName)) {
                   // does it have the correct name
                   String refValue = (String) semanticRef.get(attrName);
-                  if(!refValue.equals(attrValue)){
-                    try {
-                      diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute value should be '"+ refValue + "'!", DiagnosticSeverity.Error));
-                    } catch (BadLocationException e) {
-                      e.printStackTrace();
-                    }
+                  if (!refValue.equals(attrValue)) {
+                    diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute value must be '" + refValue + "'!", DiagnosticSeverity.Error));
                   }
-                } else { // give error message on semanticNode that this attribute is not correct
-                  // 2DO
+                } else if(!(attrName.equals("id"))) { // give error message on semanticNode that this attribute should not exist
+                  diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute name '" + attrValue + "' is unknown!", DiagnosticSeverity.Error));
                 }
               }
             }
+            // *** VALIDATE THE SUB ELEMENTS OF SEMANTIC
+            NodeList semanticChildren = semanticNode.getChildNodes();
+            int xmlCount = semanticChildren.getLength();
+            if (xmlCount > 0) {
+              Collection<String> xmlPaths = new ArrayDeque<String>(xmlCount);
+              for (int x = 0; x < xmlCount; x++) {
+                DOMElement xmlNode = (DOMElement) semanticChildren.item(x);
+                NamedNodeMap xmlAttrNodes = xmlNode.getAttributes();
+                int numAttrs = xmlAttrNodes.getLength();
+                for (int a = 0; a < numAttrs; a++) {
+                  Attr attr = (Attr) xmlAttrNodes.item(a);
+                  String attrName = attr.getNodeName();
+                  String attrValue = attr.getNodeValue();
+                  if (attrName.equals("path")) {
+                    if (fillReference) { // run on reference document
+                      xmlPaths.add(attrValue);
+                    } else {
+                      // check path
+                      if (semanticRef.containsKey("xmlChildren")) {
+                        // does it have the correct name
+                        xmlPaths = (Collection) semanticRef.get("xmlChildren");
+                        if (!xmlPaths.contains(attrValue)) {
+                          diagnostics.add(toDiagnostic((DOMAttr) attr, "Xpath value '" + attrValue + "' does not exist!", DiagnosticSeverity.Error));
+                        }
+                      }
+                    }
+                  } else {
+                    // validate attributes of XML element
+                    // 2DO
+                  }
+                }
+                semanticMap.put("xmlChildren", xmlPaths);
+              }
+
+            }
+          } else {
+            //2DO: Diagnostic there should be no Text node on this level!
+            continue;
           }
-        }else {
-          //2DO: Diagnostic there should be no Text node on this level!
-          continue;
         }
+        // System.out.println("SemanticRefs: " + syntaxBindingReference.toString());
       }
-      // System.out.println("SemanticRefs: " + syntaxBindingReference.toString());
     }
   }
 }
