@@ -198,12 +198,12 @@ public class IDISSValidator {
             NamedNodeMap semanticAttrNodes = semanticNode.getAttributes();
             // fetch the ID in the beginning to identify the correct reference
             Attr idAttr = (Attr) semanticAttrNodes.getNamedItem("id");
-            String idValue = idAttr.getNodeValue();
+            String semanticID = idAttr.getNodeValue();
             Map<String, Object> semanticRef = null;
             if (fillReference) { // run on reference document
-              syntaxBindingReference.put(idValue, semanticMap);
+              syntaxBindingReference.put(semanticID, semanticMap);
             } else { // run on test document
-              semanticRef = syntaxBindingReferenceCopy.get(idValue);
+              semanticRef = syntaxBindingReferenceCopy.get(semanticID);
             }
             int attCount = semanticAttrNodes.getLength();
             for (int a = 0; a < attCount; a++) {
@@ -221,10 +221,10 @@ public class IDISSValidator {
                   // does it have the correct name
                   String refValue = (String) semanticRef.get(attrName);
                   if (!refValue.equals(attrValue)) {
-                    diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute value must be '" + refValue + "'!", DiagnosticSeverity.Error));
+                    diagnostics.add(toDiagnostic((DOMAttr) attr, "The attribute '" + attrName + "' must have the value '" + refValue + "' for '" + semanticID + "'!", DiagnosticSeverity.Error));
                   }
                 } else if(!(attrName.equals("id"))) { // give error message on semanticNode that this attribute should not exist
-                  diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute name '" + attrValue + "' is unknown!", DiagnosticSeverity.Error));
+                  diagnostics.add(toDiagnostic((DOMAttr) attr, "Attribute name '" + attrName + "' is unknown to '" + semanticID + "'!", DiagnosticSeverity.Error));
                 }
               }
             }
@@ -250,7 +250,7 @@ public class IDISSValidator {
                         // does it have the correct name
                         xmlPaths = (Collection) semanticRef.get("xmlChildren");
                         if (!xmlPaths.contains(attrValue)) {
-                          diagnostics.add(toDiagnostic((DOMAttr) attr, "Xpath value '" + attrValue + "' does not exist!", DiagnosticSeverity.Error));
+                          diagnostics.add(toDiagnostic((DOMAttr) attr, "The Xpath '" + attrValue + "' does not exist!", DiagnosticSeverity.Error));
                         }
                       }
                     }
