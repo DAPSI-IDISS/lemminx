@@ -12,28 +12,38 @@
  */
 package org.eclipse.lemminx.extensions.idiss.participants.diagnostics;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+
+
+import java.io.*;
+import java.net.URISyntaxException;
+import java.util.ArrayDeque;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.logging.Level;
+import java.util.Map;
+
+import javax.annotation.Nonnull;
+
+import com.google.gson.Gson;
+import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.commons.TextDocument;
+import org.eclipse.lemminx.dom.*;
+import org.eclipse.lemminx.utils.XMLPositionUtility;
+import org.eclipse.lsp4j.Diagnostic;
+import org.eclipse.lsp4j.DiagnosticSeverity;
+import org.eclipse.lsp4j.Range;
+import org.eclipse.lsp4j.jsonrpc.CancelChecker;
+
 import java.util.logging.Logger;
 
-import org.apache.xerces.impl.Constants;
 import org.apache.xerces.impl.XMLErrorReporter;
 import org.apache.xerces.impl.xs.XMLSchemaLoader;
-import org.apache.xerces.parsers.XMLGrammarPreparser;
-import org.apache.xerces.util.XMLGrammarPoolImpl;
-import org.apache.xerces.xni.grammars.XMLGrammarDescription;
 import org.apache.xerces.xni.parser.XMLEntityResolver;
-import org.apache.xerces.xni.parser.XMLInputSource;
-import org.apache.xerces.xni.parser.XMLParseException;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.extensions.xerces.AbstractLSPErrorReporter;
-import org.eclipse.lsp4j.Diagnostic;
-import org.eclipse.lsp4j.jsonrpc.CancelChecker;
+import org.w3c.dom.*;
+
+import static org.eclipse.lemminx.utils.IOUtils.convertStreamToString;
 
 /**
  * IDISS validator utilities class.
@@ -44,55 +54,27 @@ public class IDISSValidator {
 	private static final Logger LOGGER = Logger.getLogger(IDISSValidator.class.getName());
 
 	private static boolean canCustomizeReporter = true;
+  private static Map<String, Map> syntaxBindingReferences = null;
+  private static final String SYNTAX_BINDING_REFERENCE = "/references/syntax-binding.syb";
 
-	public static void doDiagnostics(DOMDocument document, XMLEntityResolver entityResolver,
+  private static void initializeSyntaxBindingReferences(){
+    syntaxBindingReferences = initializeSyntaxBindingReferences(getDOMDocument(SYNTAX_BINDING_REFERENCE));
+  }
+  private Range getRange(DOMElement node) {
+    return XMLPositionUtility.createRange(((DOMElement) node).getStartTagCloseOffset() + 1,
+      ((DOMElement) node).getEndTagOpenOffset(), node.getOwnerDocument());
+  }
+
+  public static void doDiagnostics(DOMDocument document, List <Diagnostic> diagnostics) {
+    doDiagnostics(document, null, diagnostics, false, null);
+  }
+
+  public static void doDiagnostics(DOMDocument document, XMLEntityResolver entityResolver,
 			List<Diagnostic> diagnostics, boolean isRelatedInformation, CancelChecker monitor) {
-
-		try {
-			XMLErrorReporter reporter = new LSPErrorReporterForIDISS(document, diagnostics, isRelatedInformation);
-
-			XMLGrammarPreparser grammarPreparser = new LSPXMLGrammarPreparser();
-			XMLSchemaLoader schemaLoader = createSchemaLoader(reporter);
-
-			grammarPreparser.registerPreparser(XMLGrammarDescription.XML_SCHEMA, schemaLoader);
-
-			grammarPreparser.setProperty(Constants.XERCES_PROPERTY_PREFIX + Constants.XMLGRAMMAR_POOL_PROPERTY,
-					new XMLGrammarPoolImpl());
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.CONTINUE_AFTER_FATAL_ERROR_FEATURE,
-					false);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.NAMESPACES_FEATURE, true);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.NAMESPACE_PREFIXES_FEATURE, true);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.VALIDATION_FEATURE, true);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.SCHEMA_VALIDATION_FEATURE, true);
-
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.EXTERNAL_GENERAL_ENTITIES_FEATURE,
-					true);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.EXTERNAL_PARAMETER_ENTITIES_FEATURE,
-					true);
-			grammarPreparser.setFeature(Constants.XERCES_FEATURE_PREFIX + Constants.WARN_ON_DUPLICATE_ATTDEF_FEATURE,
-					true);
-
-			// Add LSP content handler to stop XML parsing if monitor is canceled.
-			// grammarPreparser.setContentHandler(new LSPContentHandler(monitor));
-
-			// Add LSP error reporter to fill LSP diagnostics from Xerces errors
-			grammarPreparser.setProperty("http://apache.org/xml/properties/internal/error-reporter", reporter);
-
-			if (entityResolver != null) {
-				grammarPreparser.setEntityResolver(entityResolver);
-			}
-
-			String content = document.getText();
-			String uri = document.getDocumentURI();
-			InputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
-			XMLInputSource is = new XMLInputSource(null, uri, uri, inputStream, null);
-			grammarPreparser.getLoader(XMLGrammarDescription.XML_SCHEMA);
-			grammarPreparser.preparseGrammar(XMLGrammarDescription.XML_SCHEMA, is);
-		} catch (IOException | CancellationException | XMLParseException exception) {
-			// ignore error
-		} catch (Exception e) {
-			LOGGER.log(Level.SEVERE, "Unexpected IDISSValidator error", e);
-		}
+      if(syntaxBindingReferences == null){
+        initializeSyntaxBindingReferences();
+      }
+      validateSyntaxBinding(document, diagnostics, syntaxBindingReferences);
 	}
 
 	/**
@@ -120,4 +102,153 @@ public class IDISSValidator {
 		return schemaLoader;
 	}
 
+  /**
+   * @param  xmlPath path to the xml resource
+   * @return  A {@link org.eclipse.lemminx.dom.DOMDocument} object;
+   *
+   * @see Class#getResourceAsStream(String)
+  */
+  public static DOMDocument getDOMDocument(String xmlPath){
+    InputStream in = IDISSValidator.class.getResourceAsStream(xmlPath);
+    String content = convertStreamToString(in);
+    String xmlURI = null;
+    try {
+      xmlURI = IDISSValidator.class.getResource(xmlPath).toURI().toString();
+    } catch (URISyntaxException e) {
+      e.printStackTrace();
+    }
+    TextDocument textDocument = new TextDocument(content, xmlURI);
+    //long start = System.currentTimeMillis();
+    return DOMParser.getInstance().parse(textDocument, null);
+    //System.err.println("Parsed 'syntax-binding.syb' with XMLParser in " + (System.currentTimeMillis() - start) + " ms.");
+  }
+
+  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity) throws BadLocationException {
+    TextDocument textDocument = node.getOwnerDocument().getTextDocument();
+    // diagnostic.setRange(XMLPositionUtility.createRange(node.getStart(), node.getEnd(), node.getOwnerDocument()));
+    /*
+    node.getStart();
+    diagnostic.setRange(new Range(new Position(problem.getLineNumber() - 1, problem.getColumnNumber() - 1),
+      new Position(problem.getLineNumber() - 1, problem.getColumnNumber())));
+    */
+    Range range = new Range(textDocument.positionAt(node.getStart()), textDocument.positionAt(node.getEnd()));
+    return toDiagnostic(node, message, severity, range);
+  }
+
+  private static Diagnostic toDiagnostic(@Nonnull DOMNode node, @Nonnull String message, @Nonnull DiagnosticSeverity severity, @Nonnull Range range) throws BadLocationException {
+    Diagnostic diagnostic = new Diagnostic();
+    diagnostic.setMessage(message);
+    diagnostic.setSeverity(severity);
+    diagnostic.setRange(range);
+    return diagnostic;
+  }
+
+  private static Map initializeSyntaxBindingReferences(DOMDocument document) {
+    Map<String, Map> refCandidate = new HashMap<String, Map>();
+    validateSyntaxBinding(document,null, refCandidate);
+    return refCandidate;
+  }
+
+  private static<K, V> Map<K, V> clone(Map<K, V> original)
+  {
+    Gson gson = new Gson();
+    String jsonString = gson.toJson(original);
+
+    return gson.fromJson(jsonString, Map.class);
+  }
+
+  /**
+   * @param syntaxBindingReference if the reference is empty the reference will be filled from the results
+   * */
+  public static void validateSyntaxBinding(DOMDocument document, List<Diagnostic> diagnostics, Map<String, Map> syntaxBindingReference ) {
+    Boolean fillReference = Boolean.FALSE;
+    Map<String, Map> syntaxBindingReferenceCopy = null;
+    if(syntaxBindingReference.isEmpty()){
+      fillReference = Boolean.TRUE;
+    }else{
+      syntaxBindingReferenceCopy = clone(syntaxBindingReference);
+    }
+
+    DOMNode documentElement = document.getDocumentElement();
+    if(documentElement != null){
+      // every semantic defined can be gathered by ID
+      Node semantic = documentElement.getFirstChild();
+      String semanticName = semantic.getNodeName();
+      NodeList allSemanticNodes = documentElement.getChildNodes();
+      Node firstX = semantic.getFirstChild();
+      String firstXName = firstX.getNodeName();
+      int length = allSemanticNodes.getLength();
+      for(int i = 0; i < allSemanticNodes.getLength();i++){
+        Map<String, Object> semanticMap = new HashMap<String, Object>(7);
+        Node n = allSemanticNodes.item(i);
+        if(n instanceof Text)
+          continue;
+        else {
+          String localName = n.getLocalName();
+          if(n instanceof DOMAttr){
+            String value = ((DOMAttr) n).getValue();
+            String attrNodeValue = ((DOMAttr) n).getNodeValue();
+          }else if(n instanceof DOMElement){
+            NodeList xmlNodes = n.getChildNodes();
+            int xmlCount = xmlNodes.getLength();
+            if(xmlCount > 0){
+              Collection<String> xmlPaths = new ArrayDeque<String>(xmlCount);
+              for (int x = 0; x < xmlCount; x++){
+                DOMElement xmlNode = (DOMElement) xmlNodes.item(x);
+                NamedNodeMap xmlAttrNodes = xmlNode.getAttributes();
+                int numAttrs = xmlAttrNodes.getLength();
+                for (int a = 0; a < numAttrs; a++) {
+                  Attr attr = (Attr) xmlAttrNodes.item(a);
+                  String attrName = attr.getNodeName();
+                  String attrValue = attr.getNodeValue();
+                  if (attrName.equals("path")) {
+                    xmlPaths.add(attrValue);
+                  }
+                }
+              }
+              semanticMap.put("xmlChildren", xmlPaths);
+            }
+            NamedNodeMap semanticAttrNodes = n.getAttributes();
+            // fetch the ID in the beginning to identify the correct reference
+            Attr idAttr = (Attr) semanticAttrNodes.getNamedItem("id");
+            String idValue = idAttr.getNodeValue();
+            Map<String, Object> semanticRef = null;
+            if(fillReference){ // run on reference document
+              syntaxBindingReference.put(idValue, semanticMap);
+            }else{ // run on test document
+              semanticRef = syntaxBindingReferenceCopy.get(idValue);
+            }
+            int attCount = semanticAttrNodes.getLength();
+            for (int a = 0; a < attCount; a++) {
+              Attr attr = (Attr) semanticAttrNodes.item(a);
+              String attrName = attr.getNodeName();
+              if (attrName.equals("id")) {
+                continue;
+              }
+              String attrValue = attr.getNodeValue();
+              if (fillReference) { // run on reference document
+                semanticMap.put(attrName, attrValue);
+              } else {
+                // checkAttribute()
+                if (semanticRef.containsKey(attrName)) {
+                  // does it have the correct name
+                  String refValue = (String) semanticRef.get(attrName);
+                  if(!refValue.equals(attrValue)){
+                    try {
+                      toDiagnostic((DOMAttr) attr, "Attribute value should be '"+ refValue + "'!", DiagnosticSeverity.Error);
+                    } catch (BadLocationException e) {
+                      e.printStackTrace();
+                    }
+                  }
+                } else { // give error message on semantic that this attribute is not correct
+                  // 2DO
+                }
+              }
+            }
+          }
+        }
+      }
+      // System.out.println("SemanticRefs: " + syntaxBindingReference.toString());
+    }
+  }
 }
