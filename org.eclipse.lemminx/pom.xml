@@ -12,7 +12,7 @@
 		<dev.build.timestamp>${maven.build.timestamp}</dev.build.timestamp>
 		<cbi.jarsigner.skip>true</cbi.jarsigner.skip>
 		<graalvm.version>20.3.0</graalvm.version>
-		<graalvm.static />
+		<graalvm.static/>
 	</properties>
 	<build>
 		<resources>
@@ -223,7 +223,7 @@
 		<dependency>
 			<groupId>xerces</groupId>
 			<artifactId>xercesImpl</artifactId>
-			<version>2.12.1</version>
+			<version>2.12.2</version>
 		</dependency>
 		<dependency>
 			<groupId>xml-apis</groupId>
